@@ -1,5 +1,4 @@
 import { Component, OnInit } from '@angular/core';
-import { MatTableDataSource } from '@angular/material/table';
 
 @Component({
   selector: 'index-template-component',
@@ -11,7 +10,7 @@ import { MatTableDataSource } from '@angular/material/table';
 
 export class IndexTemplateComponent implements OnInit {
   displayedColumns: string[] = [];
-  dataSource: MatTableDataSource<any> = new MatTableDataSource<any>();
+  // dataSource: MatTableDataSource<any> = new MatTableDataSource<any>();
   length: number = 0;
   pageSize: number = 5;
   pageSizeOptions: number[] = [5, 10, 20, 50];
