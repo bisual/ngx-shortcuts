@@ -8,7 +8,7 @@ import { IndexTemplateComponent } from './index-template.component';
     IndexTemplateComponent
   ],
   imports: [
-    CommonModule
+    CommonModule,
   ],
   exports: [
     IndexTemplateComponent
