@@ -92,7 +92,6 @@ export class IndexTemplateComponent extends IndexTemplateAbstractClass implement
     );
   }
 
-
   changePage(event:any) {
     this.filterForm.patchValue({
       page: event.pageIndex + 1,
@@ -110,5 +109,11 @@ export class IndexTemplateComponent extends IndexTemplateAbstractClass implement
       order_by: event.active,
       order_by_direction: event.direction
     });
+  }
+
+  setMetadata(length:number, currentPage:number, pageSize: number) {
+    this.length = length
+    this.pageIndex = currentPage
+    this.pageSize = pageSize
   }
 }
