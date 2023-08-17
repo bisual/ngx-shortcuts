@@ -17,7 +17,7 @@ export class IndexTemplateComponent extends IndexTemplateAbstractClass implement
   displayedColumns: string[] = [];
   // dataSource: MatTableDataSource<any> = new MatTableDataSource<any>();
   length: number = 0;
-  pageSize: number = 5;
+  pageSize: number = 10;
   pageSizeOptions: number[] = [5, 10, 20, 50];
   pageIndex: number = 0;
   sorting:any = {order_by: null, order_by_direction: 'asc'};
