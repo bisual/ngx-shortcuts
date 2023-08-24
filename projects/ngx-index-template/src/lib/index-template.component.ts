@@ -60,7 +60,7 @@ export class IndexTemplateComponent extends IndexTemplateAbstractClass implement
   fetchData(): void {}
 
   private initFilterFormListener() {
-    this.filterForm.valueChanges.pipe(debounceTime(400)).subscribe(
+    this.filterForm.valueChanges.pipe(debounceTime(200)).subscribe(
       data => {
         data.per_page = +data.per_page;
         if(this.formPersistence==null || JSON.stringify(this.formPersistence)!=JSON.stringify(data)) {
