@@ -17,7 +17,7 @@ export class IndexTemplateComponent extends IndexTemplateAbstractClass implement
   displayedColumns: string[] = [];
   // dataSource: MatTableDataSource<any> = new MatTableDataSource<any>();
   length: number = 0;
-  pageSize: number = 5;
+  pageSize: number = 10;
   pageSizeOptions: number[] = [5, 10, 20, 50];
   pageIndex: number = 0;
   sorting:any = {order_by: null, order_by_direction: 'asc'};
@@ -64,7 +64,9 @@ export class IndexTemplateComponent extends IndexTemplateAbstractClass implement
       data => {
         data.per_page = +data.per_page;
         if(this.formPersistence==null || JSON.stringify(this.formPersistence)!=JSON.stringify(data)) {
-          if(this.formPersistence.per_page!=data.per_page) data.page = 1;
+          if(this.formPersistence.per_page!=data.per_page && data.page==this.formPersistence.page && this.formPersistence.page != null) {
+            data.page = 1;
+          }
           // navigate to same route with new query params
           this._router.navigate([], {
             relativeTo: this._activatedRoute,
