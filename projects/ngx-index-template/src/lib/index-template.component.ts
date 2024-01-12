@@ -64,7 +64,9 @@ export class IndexTemplateComponent extends IndexTemplateAbstractClass implement
       data => {
         data.per_page = +data.per_page;
         if(this.formPersistence==null || JSON.stringify(this.formPersistence)!=JSON.stringify(data)) {
-          if(this.formPersistence.per_page!=data.per_page) data.page = 1;
+          if(this.formPersistence.per_page!=data.per_page && data.page==this.formPersistence.page && this.formPersistence.page != null) {
+            data.page = 1;
+          }
           // navigate to same route with new query params
           this._router.navigate([], {
             relativeTo: this._activatedRoute,
