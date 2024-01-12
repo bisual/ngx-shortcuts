@@ -84,8 +84,18 @@ export class IndexTemplateComponent extends IndexTemplateAbstractClass implement
           Object.keys(params_temp).forEach(param_key => {
             if(params_temp[param_key]!=null && params_temp[param_key]!="" && !isNaN(+params_temp[param_key])) params_temp[param_key] = +params_temp[param_key]; // si es numero, el transformem
           });
+
+          // if a in this.filterForm is different than the previous one, set page to 1
+          if(this.formPersistence!=null) {
+            Object.keys(this.filterForm.controls).forEach(form_key => {
+              if(form_key!='page' && this.formPersistence[form_key]!=params_temp[form_key]) params_temp['page'] = 1;
+            });
+          }
+
           this.filterForm.patchValue(params_temp, { emitEvent: false });
         }
+
+
         this.formPersistence = params;
         this.fetchData();
       }
