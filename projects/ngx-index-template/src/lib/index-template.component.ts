@@ -21,6 +21,7 @@ export class IndexTemplateComponent extends IndexTemplateAbstractClass implement
   pageSizeOptions: number[] = [5, 10, 20, 50];
   pageIndex: number = 1;
   sorting:any = {order_by: null, order_by_direction: 'asc'};
+  debounceTimeInMs:number = 200
 
   filterForm:UntypedFormGroup;
   formPersistence:any;
@@ -60,7 +61,7 @@ export class IndexTemplateComponent extends IndexTemplateAbstractClass implement
   fetchData(): void {}
 
   private initFilterFormListener() {
-    this.filterForm.valueChanges.pipe(debounceTime(200)).subscribe(
+    this.filterForm.valueChanges.pipe(debounceTime(this.debounceTimeInMs)).subscribe(
       data => {
         data.per_page = +data.per_page;
         if(this.formPersistence==null || JSON.stringify(this.formPersistence)!=JSON.stringify(data)) {
