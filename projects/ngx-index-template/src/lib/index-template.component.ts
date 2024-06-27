@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, Input } from '@angular/core';
 import { UntypedFormBuilder, UntypedFormGroup, Validators } from '@angular/forms';
 // import { MatTableDataSource } from '@angular/material/table';
 // import { PageEvent } from '@angular/material/paginator';
@@ -14,6 +14,7 @@ import { IndexTemplateAbstractClass } from './abstract/index-template-abstract';
 })
 
 export class IndexTemplateComponent extends IndexTemplateAbstractClass implements OnInit {
+  @Input() noFetchFields: string[] = [];
   displayedColumns: string[] = [];
   // dataSource: MatTableDataSource<any> = new MatTableDataSource<any>();
   length: number = 0;
@@ -82,27 +83,39 @@ export class IndexTemplateComponent extends IndexTemplateAbstractClass implement
   private listenQueryParameters() {
     this._activatedRoute.queryParams.subscribe(
       params => {
-        if(JSON.stringify(params)!==JSON.stringify(this.filterForm.value)) { //si no ve de filtre s'ha de setejar el form
-          let params_temp = this._utils.cloneObj(params); //params es read_only
-          Object.keys(params_temp).forEach(param_key => {
-            if(params_temp[param_key]!=null && params_temp[param_key]!="" && !isNaN(+params_temp[param_key])) params_temp[param_key] = +params_temp[param_key]; // si es numero, el transformem
-          });
+      const previousParams = this.formPersistence || {};
+      const currentParams = { ...params };
 
-          // if a in this.filterForm is different than the previous one, set page to 1
-          if(this.formPersistence!=null) {
-            Object.keys(this.filterForm.controls).forEach(form_key => {
-              if(form_key!='page' && this.formPersistence[form_key]!=params_temp[form_key]) params_temp['page'] = 1;
-            });
+      // Determine the fields that have changed
+      const fieldsChanged = Object.keys(currentParams).filter(key => previousParams[key] !== currentParams[key]);
+
+      // Check if there is just one field changed to avoid problems on init search.
+      // Check if any of the changed fields are in the noFetchFields array.
+      const noFetchTriggered = fieldsChanged.length === 0 && fieldsChanged.some(field => this.noFetchFields.includes(field));
+
+      if (JSON.stringify(currentParams) !== JSON.stringify(this.filterForm.value)) {
+        let params_temp = this._utils.cloneObj(currentParams);
+        Object.keys(params_temp).forEach(param_key => {
+          if (params_temp[param_key]!=null && params_temp[param_key]!="" && !isNaN(+params_temp[param_key])) {
+            params_temp[param_key] = +params_temp[param_key];
           }
+        });
 
-          this.filterForm.patchValue(params_temp, { emitEvent: false });
+        // if a in this.filterForm is different than the previous one, set page to 1
+        if(this.formPersistence!=null) {
+          Object.keys(this.filterForm.controls).forEach(form_key => {
+            if(form_key!='page' && this.formPersistence[form_key]!=params_temp[form_key]) params_temp['page'] = 1;
+          });
         }
 
+        this.filterForm.patchValue(params_temp, { emitEvent: false });
+      }
 
-        this.formPersistence = params;
+      this.formPersistence = currentParams;
+      if (!noFetchTriggered) {
         this.fetchData();
       }
-    );
+    });
   }
 
   changePage(event:any) {
