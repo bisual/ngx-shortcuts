@@ -26,6 +26,7 @@ export class IndexTemplateComponent extends IndexTemplateAbstractClass implement
 
   filterForm:UntypedFormGroup;
   formPersistence:any;
+  filterFormExtraParams:any = {};
 
   private _router: Router;
   private _fb: UntypedFormBuilder;
@@ -51,6 +52,7 @@ export class IndexTemplateComponent extends IndexTemplateAbstractClass implement
       page: [this._activatedRoute.snapshot.queryParamMap.get('page')!=null ? +(this._activatedRoute.snapshot.queryParamMap.get('page') as any) : this.pageIndex, Validators.required],
       order_by: [this._activatedRoute.snapshot.queryParamMap.get('order_by')!=null ? this._activatedRoute.snapshot.queryParamMap.get('order_by') : this.sorting.order_by],
       order_by_direction: [this._activatedRoute.snapshot.queryParamMap.get('order_by_direction')!=null ? this._activatedRoute.snapshot.queryParamMap.get('order_by_direction') : this.sorting.order_by_direction],
+      ...this.filterFormExtraParams
     });
    }
 
