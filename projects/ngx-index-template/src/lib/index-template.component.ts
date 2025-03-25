@@ -33,6 +33,9 @@ export class IndexTemplateComponent extends IndexTemplateAbstractClass implement
   private _activatedRoute: ActivatedRoute;
   private _utils: UtilsService;
 
+  serializer:{[key:string]:() => any} = {};
+  deserializer:{[key:string]:((data:string) => any)} = {};
+
   constructor(
     router: Router,
     fb:UntypedFormBuilder,
@@ -53,11 +56,11 @@ export class IndexTemplateComponent extends IndexTemplateAbstractClass implement
       order_by: [this._activatedRoute.snapshot.queryParamMap.get('order_by')!=null ? this._activatedRoute.snapshot.queryParamMap.get('order_by') : this.sorting.order_by],
       ...this.filterFormExtraParams
     });
-   }
+  }
 
   ngOnInit(): void {
     this.initFilterFormListener();
-    this.listenQueryParameters();  
+    this.listenQueryParameters();
   }
 
   fetchData(): void {}
@@ -70,6 +73,11 @@ export class IndexTemplateComponent extends IndexTemplateAbstractClass implement
           if(this.formPersistence.per_page!=data.per_page && data.page==this.formPersistence.page && this.formPersistence.page != null) {
             data.page = 1;
           }
+
+          for(let key of Object.keys(this.serializer)) {
+            data[key] = this.serializer[key]();
+          }
+
           // navigate to same route with new query params
           this._router.navigate([], {
             relativeTo: this._activatedRoute,
@@ -97,7 +105,10 @@ export class IndexTemplateComponent extends IndexTemplateAbstractClass implement
       if (JSON.stringify(currentParams) !== JSON.stringify(this.filterForm.value)) {
         let params_temp = this._utils.cloneObj(currentParams);
         Object.keys(params_temp).forEach(param_key => {
-          if (params_temp[param_key]!=null && params_temp[param_key]!="" && !isNaN(+params_temp[param_key])) {
+          if(param_key in this.deserializer) {
+            params_temp[param_key] = this.deserializer[param_key](params_temp[param_key]);
+          }
+          else if (params_temp[param_key]!=null && params_temp[param_key]!="" && !isNaN(+params_temp[param_key])) {
             params_temp[param_key] = +params_temp[param_key];
           }
         });
