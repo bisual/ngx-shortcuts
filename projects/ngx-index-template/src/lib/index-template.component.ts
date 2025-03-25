@@ -28,37 +28,21 @@ export class IndexTemplateComponent extends IndexTemplateAbstractClass implement
   formPersistence:any;
   filterFormExtraParams:any = {};
 
-  private _router: Router;
-  private _fb: UntypedFormBuilder;
-  private _activatedRoute: ActivatedRoute;
-  private _utils: UtilsService;
-
   serializer:{[key:string]:() => any} = {};
   deserializer:{[key:string]:((data:string) => any)} = {};
 
   constructor(
-    router: Router,
-    fb:UntypedFormBuilder,
-    activatedRoute:ActivatedRoute,
-    utils:UtilsService,
+    protected router: Router,
+    protected fb:UntypedFormBuilder,
+    protected activatedRoute:ActivatedRoute,
+    protected utils:UtilsService,
   ) {
     super();
-
-    this._router = router;
-    this._fb = fb;
-    this._activatedRoute = activatedRoute;
-    this._utils = utils;
-
-    this.filterForm = this._fb.group({
-      search: [this._activatedRoute.snapshot.queryParamMap.get('search')!=null ? this._activatedRoute.snapshot.queryParamMap.get('search') : '', Validators.compose([Validators.minLength(3)])],
-      per_page: [this._activatedRoute.snapshot.queryParamMap.get('per_page')!=null ? +(this._activatedRoute.snapshot.queryParamMap.get('per_page') as any) : this.pageSize, Validators.required],
-      page: [this._activatedRoute.snapshot.queryParamMap.get('page')!=null ? +(this._activatedRoute.snapshot.queryParamMap.get('page') as any) : this.pageIndex, Validators.required],
-      order_by: [this._activatedRoute.snapshot.queryParamMap.get('order_by')!=null ? this._activatedRoute.snapshot.queryParamMap.get('order_by') : this.sorting.order_by],
-      ...this.filterFormExtraParams
-    });
+    this.filterForm = this.fb.group({});
   }
 
   ngOnInit(): void {
+    this.initFilterForm();
     this.initFilterFormListener();
     this.listenQueryParameters();
   }
@@ -79,8 +63,8 @@ export class IndexTemplateComponent extends IndexTemplateAbstractClass implement
           }
 
           // navigate to same route with new query params
-          this._router.navigate([], {
-            relativeTo: this._activatedRoute,
+          this.router.navigate([], {
+            relativeTo: this.activatedRoute,
             queryParams: data,
             queryParamsHandling: 'merge', // remove to replace all query params by provided
           });
@@ -90,7 +74,7 @@ export class IndexTemplateComponent extends IndexTemplateAbstractClass implement
   }
 
   private listenQueryParameters() {
-    this._activatedRoute.queryParams.subscribe(
+    this.activatedRoute.queryParams.subscribe(
       params => {
       const previousParams = this.formPersistence || {};
       const currentParams = { ...params };
@@ -103,7 +87,7 @@ export class IndexTemplateComponent extends IndexTemplateAbstractClass implement
       const noFetchTriggered = fieldsChanged.length === 0 && fieldsChanged.some(field => this.noFetchFields.includes(field));
 
       if (JSON.stringify(currentParams) !== JSON.stringify(this.filterForm.value)) {
-        let params_temp = this._utils.cloneObj(currentParams);
+        let params_temp = this.utils.cloneObj(currentParams);
         Object.keys(params_temp).forEach(param_key => {
           if(param_key in this.deserializer) {
             params_temp[param_key] = this.deserializer[param_key](params_temp[param_key]);
@@ -151,5 +135,15 @@ export class IndexTemplateComponent extends IndexTemplateAbstractClass implement
     this.length = length
     this.pageIndex = currentPage
     this.pageSize = pageSize
+  }
+
+  private initFilterForm() {
+    this.filterForm = this.fb.group({
+      search: [this.activatedRoute.snapshot.queryParamMap.get('search')!=null ? this.activatedRoute.snapshot.queryParamMap.get('search') : '', Validators.compose([Validators.minLength(3)])],
+      per_page: [this.activatedRoute.snapshot.queryParamMap.get('per_page')!=null ? +(this.activatedRoute.snapshot.queryParamMap.get('per_page') as any) : this.pageSize, Validators.required],
+      page: [this.activatedRoute.snapshot.queryParamMap.get('page')!=null ? +(this.activatedRoute.snapshot.queryParamMap.get('page') as any) : this.pageIndex, Validators.required],
+      order_by: [this.activatedRoute.snapshot.queryParamMap.get('order_by')!=null ? this.activatedRoute.snapshot.queryParamMap.get('order_by') : this.sorting.order_by],
+      ...this.filterFormExtraParams
+    });
   }
 }
