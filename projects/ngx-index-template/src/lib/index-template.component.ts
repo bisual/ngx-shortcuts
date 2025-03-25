@@ -21,7 +21,7 @@ export class IndexTemplateComponent extends IndexTemplateAbstractClass implement
   pageSize: number = 10;
   pageSizeOptions: number[] = [5, 10, 20, 50];
   pageIndex: number = 1;
-  sorting:any = {order_by: null, order_by_direction: 'asc'};
+  sorting:any = {order_by: null};
   debounceTimeInMs:number = 200
 
   filterForm:UntypedFormGroup;
@@ -51,14 +51,13 @@ export class IndexTemplateComponent extends IndexTemplateAbstractClass implement
       per_page: [this._activatedRoute.snapshot.queryParamMap.get('per_page')!=null ? +(this._activatedRoute.snapshot.queryParamMap.get('per_page') as any) : this.pageSize, Validators.required],
       page: [this._activatedRoute.snapshot.queryParamMap.get('page')!=null ? +(this._activatedRoute.snapshot.queryParamMap.get('page') as any) : this.pageIndex, Validators.required],
       order_by: [this._activatedRoute.snapshot.queryParamMap.get('order_by')!=null ? this._activatedRoute.snapshot.queryParamMap.get('order_by') : this.sorting.order_by],
-      order_by_direction: [this._activatedRoute.snapshot.queryParamMap.get('order_by_direction')!=null ? this._activatedRoute.snapshot.queryParamMap.get('order_by_direction') : this.sorting.order_by_direction],
       ...this.filterFormExtraParams
     });
    }
 
   ngOnInit(): void {
     this.initFilterFormListener();
-    this.listenQueryParameters();
+    this.listenQueryParameters();  
   }
 
   fetchData(): void {}
@@ -129,13 +128,11 @@ export class IndexTemplateComponent extends IndexTemplateAbstractClass implement
 
   sortChange(event:any) {
     this.sorting = {
-      order_by: event.active,
-      order_by_direction: event.direction
+      order_by: event.active
     }
     // add sorting params to form
     this.filterForm.patchValue({
-      order_by: event.active,
-      order_by_direction: event.direction
+      order_by: event.active
     });
   }
 
