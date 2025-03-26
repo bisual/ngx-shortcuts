@@ -38,11 +38,16 @@ export class IndexTemplateComponent extends IndexTemplateAbstractClass implement
     protected utils:UtilsService,
   ) {
     super();
-    this.filterForm = this.fb.group({});
+    this.filterForm = this.fb.group({
+      search: [this.activatedRoute.snapshot.queryParamMap.get('search')!=null ? this.activatedRoute.snapshot.queryParamMap.get('search') : '', Validators.compose([Validators.minLength(3)])],
+      per_page: [this.activatedRoute.snapshot.queryParamMap.get('per_page')!=null ? +(this.activatedRoute.snapshot.queryParamMap.get('per_page') as any) : this.pageSize, Validators.required],
+      page: [this.activatedRoute.snapshot.queryParamMap.get('page')!=null ? +(this.activatedRoute.snapshot.queryParamMap.get('page') as any) : this.pageIndex, Validators.required],
+      order_by: [this.activatedRoute.snapshot.queryParamMap.get('order_by')!=null ? this.activatedRoute.snapshot.queryParamMap.get('order_by') : this.sorting.order_by],
+      ...this.filterFormExtraParams
+    });
   }
 
   ngOnInit(): void {
-    this.initFilterForm();
     this.initFilterFormListener();
     this.listenQueryParameters();
   }
@@ -135,15 +140,5 @@ export class IndexTemplateComponent extends IndexTemplateAbstractClass implement
     this.length = length
     this.pageIndex = currentPage
     this.pageSize = pageSize
-  }
-
-  private initFilterForm() {
-    this.filterForm = this.fb.group({
-      search: [this.activatedRoute.snapshot.queryParamMap.get('search')!=null ? this.activatedRoute.snapshot.queryParamMap.get('search') : '', Validators.compose([Validators.minLength(3)])],
-      per_page: [this.activatedRoute.snapshot.queryParamMap.get('per_page')!=null ? +(this.activatedRoute.snapshot.queryParamMap.get('per_page') as any) : this.pageSize, Validators.required],
-      page: [this.activatedRoute.snapshot.queryParamMap.get('page')!=null ? +(this.activatedRoute.snapshot.queryParamMap.get('page') as any) : this.pageIndex, Validators.required],
-      order_by: [this.activatedRoute.snapshot.queryParamMap.get('order_by')!=null ? this.activatedRoute.snapshot.queryParamMap.get('order_by') : this.sorting.order_by],
-      ...this.filterFormExtraParams
-    });
   }
 }
