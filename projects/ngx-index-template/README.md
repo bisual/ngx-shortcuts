@@ -1,28 +1,93 @@
-# NgxIndexTemplate
+# @bisual/ngx-index-template
 
-This library was generated with [Angular CLI](https://github.com/angular/angular-cli) version 15.2.0.
+Reactive index-page primitives for Angular 22. The component keeps filters,
+pagination and sorting synchronized with the router query parameters.
 
-## Code scaffolding
+## Requirements
 
-Run `ng generate component component-name --project ngx-index-template` to generate a new component. You can also use `ng generate directive|pipe|service|class|guard|interface|enum|module --project ngx-index-template`.
-> Note: Don't forget to add `--project ngx-index-template` or else it will be added to the default project in your `angular.json` file. 
+- Angular 22
+- RxJS 7.8
+- Node.js 22.22.3+, 24.15.0+ or 26+
 
-## Build
+## Usage
 
-Run `ng build ngx-index-template` to build the project. The build artifacts will be stored in the `dist/` directory.
+`IndexTemplateComponent` is standalone and can be imported directly. The
+`NgxIndexTemplateModule` export remains available for NgModule applications.
 
-## Publishing
+```ts
+import { Component } from '@angular/core';
+import { IndexTemplateComponent } from '@bisual/ngx-index-template';
 
-After building your library with `ng build ngx-index-template`, go to the dist folder `cd dist/ngx-index-template` and run `npm publish`.
+@Component({
+  selector: 'app-products',
+  standalone: true,
+  imports: [IndexTemplateComponent],
+  template: `...`,
+})
+export class ProductsComponent extends IndexTemplateComponent {
+  override fetchData(): void {
+    // Refresh imperative or Observable-based data here.
+  }
+}
+```
 
-## Running unit tests
+`noFetchFields` uses the signal input API:
 
-Run `ng test ngx-index-template` to execute the unit tests via [Karma](https://karma-runner.github.io).
+```html
+<index-template-component [noFetchFields]="['panel']">
+  ...
+</index-template-component>
+```
 
-## Further help
+## Angular 22 `httpResource`
 
-To get more help on the Angular CLI use `ng help` or go check out the [Angular CLI Overview and Command Reference](https://angular.io/cli) page.
+For GET requests, prefer `httpResource` in the concrete page. The library does
+not create an HTTP resource itself because only the consuming application knows
+the endpoint and response type. `queryParameters` is exposed as a signal so the
+resource reloads and cancels stale requests automatically.
 
-## Testing changes locally
+```ts
+import { httpResource } from '@angular/common/http';
+import { Component } from '@angular/core';
+import { IndexTemplateComponent } from '@bisual/ngx-index-template';
 
-Read the Bisual wiki document --> Desarrollo > Angular > Cómo probar una librería Angular localmente en otro proyecto
+interface ProductPage {
+  readonly data: readonly Product[];
+  readonly total: number;
+}
+
+@Component({
+  selector: 'app-products',
+  standalone: true,
+  template: `...`,
+})
+export class ProductsComponent extends IndexTemplateComponent {
+  readonly products = httpResource<ProductPage>(
+    () => ({
+      url: '/api/products',
+      params: this.queryParameters(),
+    }),
+    { defaultValue: { data: [], total: 0 } },
+  );
+}
+```
+
+Configure `HttpClient` in the consuming application when HTTP features such as
+interceptors or XSRF options are needed:
+
+```ts
+bootstrapApplication(AppComponent, {
+  providers: [provideHttpClient()],
+});
+```
+
+Use `HttpClient` directly for mutations such as POST, PUT, PATCH or DELETE.
+
+## Development
+
+```bash
+npm run build
+npm test
+```
+
+The production package is generated in `dist/ngx-index-template`.

@@ -4,3 +4,4 @@
 
 export * from './lib/index-template.component';
 export * from './lib/ngx-index-template.module';
+export * from './lib/services/utils.service';
