@@ -18,6 +18,7 @@ export interface IndexPageEvent {
 
 export interface IndexSortEvent {
   readonly active: string;
+  readonly direction: 'asc' | 'desc' | '';
 }
 
 type FilterValues = Record<string, unknown>;
@@ -35,7 +36,7 @@ export class IndexTemplateComponent implements OnInit {
   protected readonly formBuilder = inject(FormBuilder);
   protected readonly activatedRoute = inject(ActivatedRoute);
 
-  readonly noFetchFields = input<readonly string[]>([]);
+  noFetchFields = input<string[]>([]);
   readonly queryParameters = toSignal(this.activatedRoute.queryParams, {
     initialValue: this.activatedRoute.snapshot.queryParams,
   });
@@ -44,10 +45,13 @@ export class IndexTemplateComponent implements OnInit {
   pageSize = 10;
   pageSizeOptions: readonly number[] = [5, 10, 20, 50];
   pageIndex = 1;
-  sorting: { order_by: string | null } = { order_by: null };
+  sorting: {
+    order_by: string | null;
+    order_by_direction: 'asc' | 'desc' | '';
+  } = { order_by: null, order_by_direction: '' };
   debounceTimeInMs = 200;
 
-  filterForm: FormGroup = this.formBuilder.group({});
+  filterForm: FormGroup = this.createDefaultFilterForm();
   formPersistence: FilterValues | null = null;
   filterFormExtraParams: FilterValues = {};
 
@@ -166,9 +170,11 @@ export class IndexTemplateComponent implements OnInit {
   sortChange(event: IndexSortEvent): void {
     this.sorting = {
       order_by: event.active,
+      order_by_direction: event.direction,
     };
     this.filterForm.patchValue({
       order_by: event.active,
+      order_by_direction: event.direction,
     });
   }
 
@@ -176,6 +182,26 @@ export class IndexTemplateComponent implements OnInit {
     this.length = length;
     this.pageIndex = currentPage;
     this.pageSize = pageSize;
+  }
+
+  private createDefaultFilterForm(): FormGroup {
+    const queryParams = this.activatedRoute.snapshot.queryParamMap;
+
+    return this.formBuilder.group({
+      search: [queryParams.get('search') ?? '', Validators.minLength(3)],
+      per_page: [
+        this.numberParam(queryParams.get('per_page'), this.pageSize),
+        Validators.required,
+      ],
+      page: [
+        this.numberParam(queryParams.get('page'), this.pageIndex),
+        Validators.required,
+      ],
+      order_by: [queryParams.get('order_by') ?? this.sorting.order_by],
+      order_by_direction: [
+        queryParams.get('order_by_direction') ?? this.sorting.order_by_direction,
+      ],
+    });
   }
 
   private initFilterForm(): void {
@@ -192,6 +218,9 @@ export class IndexTemplateComponent implements OnInit {
         Validators.required,
       ],
       order_by: [queryParams.get('order_by') ?? this.sorting.order_by],
+      order_by_direction: [
+        queryParams.get('order_by_direction') ?? this.sorting.order_by_direction,
+      ],
       ...this.filterFormExtraParams,
     });
   }
