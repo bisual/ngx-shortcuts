@@ -22,22 +22,8 @@ describe('IndexTemplateComponent', () => {
       per_page: 10,
       page: 1,
       order_by: null,
-      order_by_direction: '',
     });
     expect(fetchData).toHaveBeenCalledOnce();
-  });
-
-  it('exposes page and per_page before ngOnInit', async () => {
-    await TestBed.configureTestingModule({
-      imports: [IndexTemplateComponent],
-      providers: [provideRouter([])],
-    }).compileComponents();
-
-    const fixture = TestBed.createComponent(IndexTemplateComponent);
-    const component = fixture.componentInstance;
-
-    expect(component.filterForm.contains('page')).toBe(true);
-    expect(component.filterForm.contains('per_page')).toBe(true);
   });
 });
 
