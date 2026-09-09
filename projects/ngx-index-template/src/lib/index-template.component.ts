@@ -2,26 +2,39 @@ import {
   ChangeDetectionStrategy,
   Component,
   DestroyRef,
+  Input,
   OnInit,
+  Signal,
   inject,
-  input,
 } from '@angular/core';
 import { FormBuilder, FormGroup, Validators } from '@angular/forms';
-import { ActivatedRoute, Router } from '@angular/router';
+import { ActivatedRoute, Params, Router } from '@angular/router';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { debounceTime } from 'rxjs';
+import { UtilsService } from './services/utils.service';
 
 export interface IndexPageEvent {
   readonly pageIndex: number;
   readonly pageSize: number;
 }
 
+export type IndexSortDirection = 'asc' | 'desc' | '';
+
 export interface IndexSortEvent {
   readonly active: string;
+  readonly direction?: IndexSortDirection;
 }
 
 type FilterValues = Record<string, unknown>;
 
+/**
+ * Constructor keeps `(router, fb, activatedRoute, utils)` for existing apps.
+ *
+ * Those names are NOT declared as class fields on purpose: subclasses that do
+ * `constructor(private router: Router, private fb: …) { super(...) }` must keep
+ * compiling (no TS2415 / TS4115). Values are stored in `#…` fields and also
+ * assigned on the instance at runtime for legacy `this.fb` access.
+ */
 @Component({
   selector: 'index-template-component',
   standalone: true,
@@ -29,30 +42,55 @@ type FilterValues = Record<string, unknown>;
   template: `<ng-content></ng-content>`,
 })
 export class IndexTemplateComponent implements OnInit {
-  private readonly destroyRef = inject(DestroyRef);
+  readonly #destroyRef = inject(DestroyRef);
+  #router: Router;
+  #fb: FormBuilder;
+  #activatedRoute: ActivatedRoute;
+  #utils: UtilsService;
 
-  protected readonly router = inject(Router);
-  protected readonly formBuilder = inject(FormBuilder);
-  protected readonly activatedRoute = inject(ActivatedRoute);
+  /** Typed access to the FormBuilder passed into the constructor. */
+  protected get formBuilder(): FormBuilder {
+    return this.#fb;
+  }
 
-  readonly noFetchFields = input<readonly string[]>([]);
-  readonly queryParameters = toSignal(this.activatedRoute.queryParams, {
-    initialValue: this.activatedRoute.snapshot.queryParams,
-  });
+  readonly queryParameters: Signal<Params>;
+
+  @Input() noFetchFields: string[] = [];
   displayedColumns: string[] = [];
   length = 0;
   pageSize = 10;
-  pageSizeOptions: readonly number[] = [5, 10, 20, 50];
+  pageSizeOptions: number[] = [5, 10, 20, 50];
   pageIndex = 1;
-  sorting: { order_by: string | null } = { order_by: null };
+  sorting: {
+    order_by: string | null;
+    order_by_direction?: IndexSortDirection;
+  } = { order_by: null };
   debounceTimeInMs = 200;
 
-  filterForm: FormGroup = this.formBuilder.group({});
+  filterForm: FormGroup;
   formPersistence: FilterValues | null = null;
   filterFormExtraParams: FilterValues = {};
 
   serializer: Record<string, () => unknown> = {};
   deserializer: Record<string, (data: string) => unknown> = {};
+
+  constructor(
+    router: Router,
+    fb: FormBuilder,
+    activatedRoute: ActivatedRoute,
+    utils: UtilsService,
+  ) {
+    this.#router = router;
+    this.#fb = fb;
+    this.#activatedRoute = activatedRoute;
+    this.#utils = utils;
+    Object.assign(this, { router, fb, activatedRoute, utils });
+
+    this.queryParameters = toSignal(this.#activatedRoute.queryParams, {
+      initialValue: this.#activatedRoute.snapshot.queryParams,
+    });
+    this.filterForm = this.createDefaultFilterForm();
+  }
 
   ngOnInit(): void {
     this.initFilterForm();
@@ -66,7 +104,7 @@ export class IndexTemplateComponent implements OnInit {
     this.filterForm.valueChanges
       .pipe(
         debounceTime(this.debounceTimeInMs),
-        takeUntilDestroyed(this.destroyRef),
+        takeUntilDestroyed(this.#destroyRef),
       )
       .subscribe(value => {
         const data: FilterValues = {
@@ -92,8 +130,12 @@ export class IndexTemplateComponent implements OnInit {
           data[key] = serialize();
         }
 
-        void this.router.navigate([], {
-          relativeTo: this.activatedRoute,
+        if (data['order_by_direction'] === '' || data['order_by_direction'] == null) {
+          data['order_by_direction'] = null;
+        }
+
+        void this.#router.navigate([], {
+          relativeTo: this.#activatedRoute,
           queryParams: data,
           queryParamsHandling: 'merge',
         });
@@ -101,20 +143,20 @@ export class IndexTemplateComponent implements OnInit {
   }
 
   private listenQueryParameters(): void {
-    this.activatedRoute.queryParams
-      .pipe(takeUntilDestroyed(this.destroyRef))
+    this.#activatedRoute.queryParams
+      .pipe(takeUntilDestroyed(this.#destroyRef))
       .subscribe(params => {
         const previousParams = this.formPersistence ?? {};
         const currentParams: FilterValues = { ...params };
         const fieldsChanged = Object.keys(currentParams).filter(
-          key => previousParams[key] !== currentParams[key],
+          key => !this.valuesEquivalent(previousParams[key], currentParams[key]),
         );
         const noFetchTriggered =
           fieldsChanged.length === 1 &&
-          fieldsChanged.some(field => this.noFetchFields().includes(field));
+          fieldsChanged.some(field => this.noFetchFields.includes(field));
 
         if (!this.valuesEqual(currentParams, this.filterForm.getRawValue())) {
-          const normalizedParams: FilterValues = { ...currentParams };
+          const normalizedParams: FilterValues = this.#utils.cloneObj(currentParams);
 
           for (const key of Object.keys(normalizedParams)) {
             const value = normalizedParams[key];
@@ -166,10 +208,22 @@ export class IndexTemplateComponent implements OnInit {
   sortChange(event: IndexSortEvent): void {
     this.sorting = {
       order_by: event.active,
+      ...(event.direction != null ? { order_by_direction: event.direction } : {}),
     };
-    this.filterForm.patchValue({
-      order_by: event.active,
-    });
+
+    const patch: FilterValues = { order_by: event.active };
+
+    if (event.direction != null && event.direction !== '') {
+      if (!this.filterForm.contains('order_by_direction')) {
+        this.filterForm.addControl(
+          'order_by_direction',
+          this.#fb.control(event.direction),
+        );
+      }
+      patch['order_by_direction'] = event.direction;
+    }
+
+    this.filterForm.patchValue(patch);
   }
 
   setMetadata(length: number, currentPage: number, pageSize: number): void {
@@ -178,10 +232,20 @@ export class IndexTemplateComponent implements OnInit {
     this.pageSize = pageSize;
   }
 
-  private initFilterForm(): void {
-    const queryParams = this.activatedRoute.snapshot.queryParamMap;
+  private createDefaultFilterForm(): FormGroup {
+    return this.#fb.group(this.buildFilterFormControls());
+  }
 
-    this.filterForm = this.formBuilder.group({
+  private initFilterForm(): void {
+    this.filterForm = this.#fb.group({
+      ...this.buildFilterFormControls(),
+      ...this.filterFormExtraParams,
+    });
+  }
+
+  private buildFilterFormControls(): Record<string, unknown> {
+    const queryParams = this.#activatedRoute.snapshot.queryParamMap;
+    const controls: Record<string, unknown> = {
       search: [queryParams.get('search') ?? '', Validators.minLength(3)],
       per_page: [
         this.numberParam(queryParams.get('per_page'), this.pageSize),
@@ -192,8 +256,16 @@ export class IndexTemplateComponent implements OnInit {
         Validators.required,
       ],
       order_by: [queryParams.get('order_by') ?? this.sorting.order_by],
-      ...this.filterFormExtraParams,
-    });
+    };
+
+    const orderByDirection =
+      queryParams.get('order_by_direction') ?? this.sorting.order_by_direction;
+
+    if (orderByDirection != null && orderByDirection !== '') {
+      controls['order_by_direction'] = [orderByDirection];
+    }
+
+    return controls;
   }
 
   private numberParam(value: string | null, fallback: number): number {
@@ -212,13 +284,23 @@ export class IndexTemplateComponent implements OnInit {
   }
 
   private valuesEquivalent(left: unknown, right: unknown): boolean {
+    if (left === right) {
+      return true;
+    }
+
+    if (Array.isArray(left) && Array.isArray(right)) {
+      return (
+        left.length === right.length &&
+        left.every((item, index) => this.valuesEquivalent(item, right[index]))
+      );
+    }
+
     return (
-      left === right ||
-      (left != null &&
-        right != null &&
-        !Array.isArray(left) &&
-        !Array.isArray(right) &&
-        String(left) === String(right))
+      left != null &&
+      right != null &&
+      !Array.isArray(left) &&
+      !Array.isArray(right) &&
+      String(left) === String(right)
     );
   }
 }
