@@ -60,7 +60,7 @@ export class UtilsService {
     return `${color}${alpha}`;
   }
 
-  private pad(value: number): string {
+  pad(value: number): string {
     return value.toString().padStart(2, '0');
   }
 }
