@@ -7,7 +7,7 @@ import { IndexTemplateComponent } from './index-template.component';
 import { UtilsService } from './services/utils.service';
 
 describe('IndexTemplateComponent', () => {
-  it('creates the default filter form', async () => {
+  it('creates the default filter form without order_by_direction', async () => {
     await TestBed.configureTestingModule({
       imports: [IndexTemplateComponent],
       providers: [provideRouter([])],
@@ -29,24 +29,20 @@ describe('IndexTemplateComponent', () => {
     expect(fetchData).toHaveBeenCalledOnce();
   });
 
-  it('allows private constructor params + override fetchData (legacy apps)', async () => {
+  it('exposes typed fb/utils from the base for subclasses that only call super()', async () => {
     @Component({
-      selector: 'customers-like',
+      selector: 'inherits-fb',
       standalone: true,
       template: '',
     })
-    class CustomersLikeComponent extends IndexTemplateComponent {
+    class InheritsFbComponent extends IndexTemplateComponent {
       constructor(
-        private router: Router,
-        private fb: FormBuilder,
-        private activatedRoute: ActivatedRoute,
-        private utils: UtilsService,
+        router: Router,
+        fb: FormBuilder,
+        activatedRoute: ActivatedRoute,
+        utils: UtilsService,
       ) {
         super(router, fb, activatedRoute, utils);
-      }
-
-      override fetchData(): void {
-        void this.router.navigate([], { queryParams: this.filterForm.value });
       }
 
       usesFb() {
@@ -55,19 +51,18 @@ describe('IndexTemplateComponent', () => {
     }
 
     await TestBed.configureTestingModule({
-      imports: [CustomersLikeComponent],
+      imports: [InheritsFbComponent],
       providers: [provideRouter([])],
     }).compileComponents();
 
-    const fixture = TestBed.createComponent(CustomersLikeComponent);
+    const fixture = TestBed.createComponent(InheritsFbComponent);
     const component = fixture.componentInstance;
 
     expect(component.filterForm.contains('page')).toBe(true);
     expect(component.usesFb().getRawValue()).toEqual({ ok: true });
-    component.fetchData();
   });
 
-  it('allows protected constructor params without override keyword', async () => {
+  it('allows protected constructor params that match the base fields', async () => {
     @Component({
       selector: 'protected-ctor-index',
       standalone: true,
@@ -75,10 +70,10 @@ describe('IndexTemplateComponent', () => {
     })
     class ProtectedCtorIndexComponent extends IndexTemplateComponent {
       constructor(
-        protected router: Router,
-        protected fb: FormBuilder,
-        protected activatedRoute: ActivatedRoute,
-        protected utils: UtilsService,
+        protected override router: Router,
+        protected override fb: FormBuilder,
+        protected override activatedRoute: ActivatedRoute,
+        protected override utils: UtilsService,
       ) {
         super(router, fb, activatedRoute, utils);
       }
@@ -96,6 +91,57 @@ describe('IndexTemplateComponent', () => {
     const fixture = TestBed.createComponent(ProtectedCtorIndexComponent);
     expect(fixture.componentInstance.filterForm.contains('page')).toBe(true);
     fixture.componentInstance.fetchData();
+  });
+
+  it('encodes sort direction inside order_by and never adds order_by_direction', async () => {
+    await TestBed.configureTestingModule({
+      imports: [IndexTemplateComponent],
+      providers: [provideRouter([])],
+    }).compileComponents();
+
+    const fixture = TestBed.createComponent(IndexTemplateComponent);
+    const component = fixture.componentInstance;
+    fixture.detectChanges();
+
+    component.sortChange({ active: 'created_at', direction: 'desc' });
+
+    expect(component.sorting).toEqual({ order_by: 'created_at:desc' });
+    expect(component.filterForm.get('order_by')?.value).toBe('created_at:desc');
+    expect(component.filterForm.contains('order_by_direction')).toBe(false);
+
+    component.sortChange({ active: 'created_at', direction: '' });
+
+    expect(component.sorting).toEqual({ order_by: null });
+    expect(component.filterForm.get('order_by')?.value).toBeNull();
+    expect(component.filterForm.contains('order_by_direction')).toBe(false);
+  });
+
+  it('treats array query param values as equal when comparing filters', async () => {
+    await TestBed.configureTestingModule({
+      imports: [IndexTemplateComponent],
+      providers: [provideRouter([])],
+    }).compileComponents();
+
+    const fixture = TestBed.createComponent(IndexTemplateComponent);
+    const component = fixture.componentInstance;
+    fixture.detectChanges();
+
+    const left = { status: ['open', 'won'] };
+    const right = { status: ['open', 'won'] };
+    const different = { status: ['open'] };
+
+    expect(
+      (component as unknown as { valuesEqual: (a: object, b: object) => boolean }).valuesEqual(
+        left,
+        right,
+      ),
+    ).toBe(true);
+    expect(
+      (component as unknown as { valuesEqual: (a: object, b: object) => boolean }).valuesEqual(
+        left,
+        different,
+      ),
+    ).toBe(false);
   });
 });
 

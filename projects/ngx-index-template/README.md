@@ -31,13 +31,39 @@ export class ProductsComponent extends IndexTemplateComponent {
 }
 ```
 
-`noFetchFields` uses the signal input API:
+`noFetchFields` is a classic `@Input()` (string array). Bind it from the
+template when a query-param change should update the URL without calling
+`fetchData()`:
 
 ```html
 <index-template-component [noFetchFields]="['panel']">
   ...
 </index-template-component>
 ```
+
+### Sorting and laravel-shortcuts
+
+Sort direction must live inside `order_by` (`field:asc` / `field:desc`).
+`sortChange()` writes that format. Do **not** send a separate
+`order_by_direction` query param — laravel-shortcuts would treat it as a
+column filter and can break the request.
+
+```ts
+// Prefer this in fetchData / API params:
+order_by: 'created_at:desc'
+
+// Or via the Material sort handler:
+this.sortChange({ active: 'created_at', direction: 'desc' });
+// → filterForm.order_by === 'created_at:desc'
+```
+
+### Extending the component
+
+Pass `(router, fb, activatedRoute, utils)` into `super(...)`. Prefer bare
+constructor params or `inject()` rather than `private router` /
+`private fb` parameter properties — those conflict with the protected
+fields on the base class. `protected override …` is fine when you need
+to re-declare them.
 
 ## Angular 22 `httpResource`
 

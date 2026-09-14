@@ -30,10 +30,10 @@ type FilterValues = Record<string, unknown>;
 /**
  * Constructor keeps `(router, fb, activatedRoute, utils)` for existing apps.
  *
- * Those names are NOT declared as class fields on purpose: subclasses that do
- * `constructor(private router: Router, private fb: …) { super(...) }` must keep
- * compiling (no TS2415 / TS4115). Values are stored in `#…` fields and also
- * assigned on the instance at runtime for legacy `this.fb` access.
+ * Subclasses should pass those deps through without re-declaring them as
+ * `private` parameter properties (use bare params, `protected`, or `inject()`
+ * in the child constructor body). Declaring `private router` / `private fb`
+ * on the subclass conflicts with these protected fields (TS2415).
  */
 @Component({
   selector: 'index-template-component',
@@ -43,14 +43,15 @@ type FilterValues = Record<string, unknown>;
 })
 export class IndexTemplateComponent implements OnInit {
   readonly #destroyRef = inject(DestroyRef);
-  #router: Router;
-  #fb: FormBuilder;
-  #activatedRoute: ActivatedRoute;
-  #utils: UtilsService;
 
-  /** Typed access to the FormBuilder passed into the constructor. */
+  protected router: Router;
+  protected fb: FormBuilder;
+  protected activatedRoute: ActivatedRoute;
+  protected utils: UtilsService;
+
+  /** Alias of `fb` for callers that prefer the longer name. */
   protected get formBuilder(): FormBuilder {
-    return this.#fb;
+    return this.fb;
   }
 
   readonly queryParameters: Signal<Params>;
@@ -61,10 +62,7 @@ export class IndexTemplateComponent implements OnInit {
   pageSize = 10;
   pageSizeOptions: number[] = [5, 10, 20, 50];
   pageIndex = 1;
-  sorting: {
-    order_by: string | null;
-    order_by_direction?: IndexSortDirection;
-  } = { order_by: null };
+  sorting: { order_by: string | null } = { order_by: null };
   debounceTimeInMs = 200;
 
   filterForm: FormGroup;
@@ -80,14 +78,13 @@ export class IndexTemplateComponent implements OnInit {
     activatedRoute: ActivatedRoute,
     utils: UtilsService,
   ) {
-    this.#router = router;
-    this.#fb = fb;
-    this.#activatedRoute = activatedRoute;
-    this.#utils = utils;
-    Object.assign(this, { router, fb, activatedRoute, utils });
+    this.router = router;
+    this.fb = fb;
+    this.activatedRoute = activatedRoute;
+    this.utils = utils;
 
-    this.queryParameters = toSignal(this.#activatedRoute.queryParams, {
-      initialValue: this.#activatedRoute.snapshot.queryParams,
+    this.queryParameters = toSignal(this.activatedRoute.queryParams, {
+      initialValue: this.activatedRoute.snapshot.queryParams,
     });
     this.filterForm = this.createDefaultFilterForm();
   }
@@ -111,6 +108,10 @@ export class IndexTemplateComponent implements OnInit {
           ...value,
           per_page: Number(value['per_page']),
         };
+        // Legacy: laravel-shortcuts encodes direction inside `order_by`
+        // (`field:desc`). Never keep a separate `order_by_direction`.
+        delete data['order_by_direction'];
+
         const previous = this.formPersistence;
 
         if (previous !== null && this.valuesEqual(previous, data)) {
@@ -130,20 +131,19 @@ export class IndexTemplateComponent implements OnInit {
           data[key] = serialize();
         }
 
-        if (data['order_by_direction'] === '' || data['order_by_direction'] == null) {
-          data['order_by_direction'] = null;
-        }
-
-        void this.#router.navigate([], {
-          relativeTo: this.#activatedRoute,
-          queryParams: data,
+        void this.router.navigate([], {
+          relativeTo: this.activatedRoute,
+          queryParams: {
+            ...data,
+            order_by_direction: null,
+          },
           queryParamsHandling: 'merge',
         });
       });
   }
 
   private listenQueryParameters(): void {
-    this.#activatedRoute.queryParams
+    this.activatedRoute.queryParams
       .pipe(takeUntilDestroyed(this.#destroyRef))
       .subscribe(params => {
         const previousParams = this.formPersistence ?? {};
@@ -156,7 +156,7 @@ export class IndexTemplateComponent implements OnInit {
           fieldsChanged.some(field => this.noFetchFields.includes(field));
 
         if (!this.valuesEqual(currentParams, this.filterForm.getRawValue())) {
-          const normalizedParams: FilterValues = this.#utils.cloneObj(currentParams);
+          const normalizedParams: FilterValues = this.utils.cloneObj(currentParams);
 
           for (const key of Object.keys(normalizedParams)) {
             const value = normalizedParams[key];
@@ -205,25 +205,18 @@ export class IndexTemplateComponent implements OnInit {
     });
   }
 
+  /**
+   * Encodes sort as laravel-shortcuts expects: `order_by=field:direction`.
+   * Clearing the sort (empty direction) sets `order_by` to null.
+   */
   sortChange(event: IndexSortEvent): void {
-    this.sorting = {
-      order_by: event.active,
-      ...(event.direction != null ? { order_by_direction: event.direction } : {}),
-    };
+    const hasDirection = event.direction != null && event.direction !== '';
+    const order_by = hasDirection
+      ? `${event.active}:${event.direction}`
+      : null;
 
-    const patch: FilterValues = { order_by: event.active };
-
-    if (event.direction != null && event.direction !== '') {
-      if (!this.filterForm.contains('order_by_direction')) {
-        this.filterForm.addControl(
-          'order_by_direction',
-          this.#fb.control(event.direction),
-        );
-      }
-      patch['order_by_direction'] = event.direction;
-    }
-
-    this.filterForm.patchValue(patch);
+    this.sorting = { order_by };
+    this.filterForm.patchValue({ order_by });
   }
 
   setMetadata(length: number, currentPage: number, pageSize: number): void {
@@ -233,19 +226,20 @@ export class IndexTemplateComponent implements OnInit {
   }
 
   private createDefaultFilterForm(): FormGroup {
-    return this.#fb.group(this.buildFilterFormControls());
+    return this.fb.group(this.buildFilterFormControls());
   }
 
   private initFilterForm(): void {
-    this.filterForm = this.#fb.group({
+    this.filterForm = this.fb.group({
       ...this.buildFilterFormControls(),
       ...this.filterFormExtraParams,
     });
   }
 
   private buildFilterFormControls(): Record<string, unknown> {
-    const queryParams = this.#activatedRoute.snapshot.queryParamMap;
-    const controls: Record<string, unknown> = {
+    const queryParams = this.activatedRoute.snapshot.queryParamMap;
+
+    return {
       search: [queryParams.get('search') ?? '', Validators.minLength(3)],
       per_page: [
         this.numberParam(queryParams.get('per_page'), this.pageSize),
@@ -257,15 +251,6 @@ export class IndexTemplateComponent implements OnInit {
       ],
       order_by: [queryParams.get('order_by') ?? this.sorting.order_by],
     };
-
-    const orderByDirection =
-      queryParams.get('order_by_direction') ?? this.sorting.order_by_direction;
-
-    if (orderByDirection != null && orderByDirection !== '') {
-      controls['order_by_direction'] = [orderByDirection];
-    }
-
-    return controls;
   }
 
   private numberParam(value: string | null, fallback: number): number {
