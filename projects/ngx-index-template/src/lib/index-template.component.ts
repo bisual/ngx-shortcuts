@@ -61,7 +61,7 @@ export class IndexTemplateComponent implements OnInit {
   length = 0;
   pageSize = 10;
   pageSizeOptions: number[] = [5, 10, 20, 50];
-  pageIndex = 1;
+  pageIndex = 0;
   sorting: { order_by: string | null } = { order_by: null };
   debounceTimeInMs = 200;
 
@@ -175,12 +175,22 @@ export class IndexTemplateComponent implements OnInit {
 
           if (this.formPersistence !== null) {
             const filterChanged = Object.keys(this.filterForm.controls).some(
-              key =>
-                key !== 'page' &&
-                !this.valuesEquivalent(
-                  this.formPersistence?.[key],
+              key => {
+                if (key === 'page') {
+                  return false;
+                }
+
+                const previousValue = previousParams[key];
+
+                if (previousValue === undefined) {
+                  return false;
+                }
+
+                return !this.valuesEquivalent(
+                  previousValue,
                   normalizedParams[key],
-                ),
+                );
+              },
             );
 
             if (filterChanged) {
@@ -191,6 +201,7 @@ export class IndexTemplateComponent implements OnInit {
           this.filterForm.patchValue(normalizedParams, { emitEvent: false });
         }
 
+        this.syncPaginatorFromForm();
         this.formPersistence = currentParams;
         if (!noFetchTriggered) {
           this.fetchData();
@@ -199,6 +210,8 @@ export class IndexTemplateComponent implements OnInit {
   }
 
   changePage(event: IndexPageEvent): void {
+    this.pageIndex = event.pageIndex;
+    this.pageSize = event.pageSize;
     this.filterForm.patchValue({
       page: event.pageIndex + 1,
       per_page: event.pageSize,
@@ -246,11 +259,23 @@ export class IndexTemplateComponent implements OnInit {
         Validators.required,
       ],
       page: [
-        this.numberParam(queryParams.get('page'), this.pageIndex),
+        this.numberParam(queryParams.get('page'), 1),
         Validators.required,
       ],
       order_by: [queryParams.get('order_by') ?? this.sorting.order_by],
     };
+  }
+
+  private syncPaginatorFromForm(): void {
+    const page = Number(this.filterForm.get('page')?.value ?? 1);
+    if (Number.isFinite(page) && page >= 1) {
+      this.pageIndex = page - 1;
+    }
+
+    const perPage = Number(this.filterForm.get('per_page')?.value ?? this.pageSize);
+    if (Number.isFinite(perPage) && perPage > 0) {
+      this.pageSize = perPage;
+    }
   }
 
   private numberParam(value: string | null, fallback: number): number {
