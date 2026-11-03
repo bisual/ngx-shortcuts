@@ -118,13 +118,18 @@ export class IndexTemplateComponent implements OnInit {
           return;
         }
 
-        if (
+        const filterChanged =
           previous !== null &&
-          !this.valuesEquivalent(previous['per_page'], data['per_page']) &&
-          this.valuesEquivalent(data['page'], previous['page']) &&
-          previous['page'] != null
-        ) {
+          Object.keys(this.filterForm.controls).some(
+            key =>
+              key !== 'page' &&
+              !this.valuesEquivalent(previous[key], data[key]),
+          );
+
+        if (filterChanged) {
           data['page'] = 1;
+          this.filterForm.patchValue({ page: 1 }, { emitEvent: false });
+          this.pageIndex = 0;
         }
 
         for (const [key, serialize] of Object.entries(this.serializer)) {
@@ -175,26 +180,25 @@ export class IndexTemplateComponent implements OnInit {
 
           if (this.formPersistence !== null) {
             const filterChanged = Object.keys(this.filterForm.controls).some(
-              key => {
-                if (key === 'page') {
-                  return false;
-                }
-
-                const previousValue = previousParams[key];
-
-                if (previousValue === undefined) {
-                  return false;
-                }
-
-                return !this.valuesEquivalent(
-                  previousValue,
+              key =>
+                key !== 'page' &&
+                !this.valuesEquivalent(
+                  this.formPersistence?.[key],
                   normalizedParams[key],
-                );
-              },
+                ),
             );
 
             if (filterChanged) {
               normalizedParams['page'] = 1;
+
+              if (!this.valuesEquivalent(currentParams['page'] ?? 1, 1)) {
+                void this.router.navigate([], {
+                  relativeTo: this.activatedRoute,
+                  queryParams: { page: 1 },
+                  queryParamsHandling: 'merge',
+                });
+                return;
+              }
             }
           }
 
@@ -202,7 +206,7 @@ export class IndexTemplateComponent implements OnInit {
         }
 
         this.syncPaginatorFromForm();
-        this.formPersistence = currentParams;
+        this.formPersistence = this.filterForm.getRawValue();
         if (!noFetchTriggered) {
           this.fetchData();
         }
@@ -295,6 +299,10 @@ export class IndexTemplateComponent implements OnInit {
 
   private valuesEquivalent(left: unknown, right: unknown): boolean {
     if (left === right) {
+      return true;
+    }
+
+    if (left == null && right == null) {
       return true;
     }
 
