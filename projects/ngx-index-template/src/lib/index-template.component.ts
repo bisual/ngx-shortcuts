@@ -118,15 +118,7 @@ export class IndexTemplateComponent implements OnInit {
           return;
         }
 
-        const filterChanged =
-          previous !== null &&
-          Object.keys(this.filterForm.controls).some(
-            key =>
-              key !== 'page' &&
-              !this.valuesEquivalent(previous[key], data[key]),
-          );
-
-        if (filterChanged) {
+        if (this.hasFilterChanged(previous, data)) {
           data['page'] = 1;
           this.filterForm.patchValue({ page: 1 }, { emitEvent: false });
           this.pageIndex = 0;
@@ -178,31 +170,34 @@ export class IndexTemplateComponent implements OnInit {
             }
           }
 
-          if (this.formPersistence !== null) {
-            const filterChanged = Object.keys(this.filterForm.controls).some(
-              key =>
-                key !== 'page' &&
-                !this.valuesEquivalent(
-                  this.formPersistence?.[key],
-                  normalizedParams[key],
-                ),
+          // Compare against the form (full shape), not the sparse URL: omitted
+          // keys like search= keep their form defaults instead of reading as
+          // undefined and falsely looking like a filter change.
+          const nextValues: FilterValues = {
+            ...this.filterForm.getRawValue(),
+            ...normalizedParams,
+          };
+
+          let shouldResetPageInUrl = false;
+          if (this.hasFilterChanged(this.formPersistence, nextValues)) {
+            nextValues['page'] = 1;
+            shouldResetPageInUrl = !this.valuesEquivalent(
+              currentParams['page'] ?? 1,
+              1,
             );
-
-            if (filterChanged) {
-              normalizedParams['page'] = 1;
-
-              if (!this.valuesEquivalent(currentParams['page'] ?? 1, 1)) {
-                void this.router.navigate([], {
-                  relativeTo: this.activatedRoute,
-                  queryParams: { page: 1 },
-                  queryParamsHandling: 'merge',
-                });
-                return;
-              }
-            }
           }
 
-          this.filterForm.patchValue(normalizedParams, { emitEvent: false });
+          this.filterForm.patchValue(nextValues, { emitEvent: false });
+
+          if (shouldResetPageInUrl) {
+            // Patch + persist + fetch below; do not return early — navigate may
+            // not emit (same URL / failure) and would leave the UI stuck.
+            void this.router.navigate([], {
+              relativeTo: this.activatedRoute,
+              queryParams: { page: 1 },
+              queryParamsHandling: 'merge',
+            });
+          }
         }
 
         this.syncPaginatorFromForm();
@@ -211,6 +206,22 @@ export class IndexTemplateComponent implements OnInit {
           this.fetchData();
         }
       });
+  }
+
+  /** True when any non-`page` filter control differs between snapshots. */
+  private hasFilterChanged(
+    previous: FilterValues | null,
+    next: FilterValues,
+  ): boolean {
+    if (previous === null) {
+      return false;
+    }
+
+    return Object.keys(this.filterForm.controls).some(
+      key =>
+        key !== 'page' &&
+        !this.valuesEquivalent(previous[key], next[key]),
+    );
   }
 
   changePage(event: IndexPageEvent): void {
@@ -302,7 +313,9 @@ export class IndexTemplateComponent implements OnInit {
       return true;
     }
 
-    if (left == null && right == null) {
+    // null / undefined / '' are interchangeable: the router drops nullish
+    // params and may omit empty strings, while the form keeps ''.
+    if (this.isBlankFilterValue(left) && this.isBlankFilterValue(right)) {
       return true;
     }
 
@@ -320,5 +333,9 @@ export class IndexTemplateComponent implements OnInit {
       !Array.isArray(right) &&
       String(left) === String(right)
     );
+  }
+
+  private isBlankFilterValue(value: unknown): boolean {
+    return value == null || value === '';
   }
 }
