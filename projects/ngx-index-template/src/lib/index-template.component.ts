@@ -61,7 +61,7 @@ export class IndexTemplateComponent implements OnInit {
   length = 0;
   pageSize = 10;
   pageSizeOptions: number[] = [5, 10, 20, 50];
-  pageIndex = 1;
+  pageIndex = 0;
   sorting: { order_by: string | null } = { order_by: null };
   debounceTimeInMs = 200;
 
@@ -118,13 +118,10 @@ export class IndexTemplateComponent implements OnInit {
           return;
         }
 
-        if (
-          previous !== null &&
-          !this.valuesEquivalent(previous['per_page'], data['per_page']) &&
-          this.valuesEquivalent(data['page'], previous['page']) &&
-          previous['page'] != null
-        ) {
+        if (this.hasFilterChanged(previous, data)) {
           data['page'] = 1;
+          this.filterForm.patchValue({ page: 1 }, { emitEvent: false });
+          this.pageIndex = 0;
         }
 
         for (const [key, serialize] of Object.entries(this.serializer)) {
@@ -173,32 +170,63 @@ export class IndexTemplateComponent implements OnInit {
             }
           }
 
-          if (this.formPersistence !== null) {
-            const filterChanged = Object.keys(this.filterForm.controls).some(
-              key =>
-                key !== 'page' &&
-                !this.valuesEquivalent(
-                  this.formPersistence?.[key],
-                  normalizedParams[key],
-                ),
-            );
+          // Compare against the form (full shape), not the sparse URL: omitted
+          // keys like search= keep their form defaults instead of reading as
+          // undefined and falsely looking like a filter change.
+          const nextValues: FilterValues = {
+            ...this.filterForm.getRawValue(),
+            ...normalizedParams,
+          };
 
-            if (filterChanged) {
-              normalizedParams['page'] = 1;
-            }
+          let shouldResetPageInUrl = false;
+          if (this.hasFilterChanged(this.formPersistence, nextValues)) {
+            nextValues['page'] = 1;
+            shouldResetPageInUrl = !this.valuesEquivalent(
+              currentParams['page'] ?? 1,
+              1,
+            );
           }
 
-          this.filterForm.patchValue(normalizedParams, { emitEvent: false });
+          this.filterForm.patchValue(nextValues, { emitEvent: false });
+
+          if (shouldResetPageInUrl) {
+            // Patch + persist + fetch below; do not return early — navigate may
+            // not emit (same URL / failure) and would leave the UI stuck.
+            void this.router.navigate([], {
+              relativeTo: this.activatedRoute,
+              queryParams: { page: 1 },
+              queryParamsHandling: 'merge',
+            });
+          }
         }
 
-        this.formPersistence = currentParams;
+        this.syncPaginatorFromForm();
+        this.formPersistence = this.filterForm.getRawValue();
         if (!noFetchTriggered) {
           this.fetchData();
         }
       });
   }
 
+  /** True when any non-`page` filter control differs between snapshots. */
+  private hasFilterChanged(
+    previous: FilterValues | null,
+    next: FilterValues,
+  ): boolean {
+    if (previous === null) {
+      return false;
+    }
+
+    return Object.keys(this.filterForm.controls).some(
+      key =>
+        key !== 'page' &&
+        !this.valuesEquivalent(previous[key], next[key]),
+    );
+  }
+
   changePage(event: IndexPageEvent): void {
+    this.pageIndex = event.pageIndex;
+    this.pageSize = event.pageSize;
     this.filterForm.patchValue({
       page: event.pageIndex + 1,
       per_page: event.pageSize,
@@ -246,11 +274,23 @@ export class IndexTemplateComponent implements OnInit {
         Validators.required,
       ],
       page: [
-        this.numberParam(queryParams.get('page'), this.pageIndex),
+        this.numberParam(queryParams.get('page'), 1),
         Validators.required,
       ],
       order_by: [queryParams.get('order_by') ?? this.sorting.order_by],
     };
+  }
+
+  private syncPaginatorFromForm(): void {
+    const page = Number(this.filterForm.get('page')?.value ?? 1);
+    if (Number.isFinite(page) && page >= 1) {
+      this.pageIndex = page - 1;
+    }
+
+    const perPage = Number(this.filterForm.get('per_page')?.value ?? this.pageSize);
+    if (Number.isFinite(perPage) && perPage > 0) {
+      this.pageSize = perPage;
+    }
   }
 
   private numberParam(value: string | null, fallback: number): number {
@@ -273,6 +313,12 @@ export class IndexTemplateComponent implements OnInit {
       return true;
     }
 
+    // null / undefined / '' are interchangeable: the router drops nullish
+    // params and may omit empty strings, while the form keeps ''.
+    if (this.isBlankFilterValue(left) && this.isBlankFilterValue(right)) {
+      return true;
+    }
+
     if (Array.isArray(left) && Array.isArray(right)) {
       return (
         left.length === right.length &&
@@ -287,5 +333,9 @@ export class IndexTemplateComponent implements OnInit {
       !Array.isArray(right) &&
       String(left) === String(right)
     );
+  }
+
+  private isBlankFilterValue(value: unknown): boolean {
+    return value == null || value === '';
   }
 }

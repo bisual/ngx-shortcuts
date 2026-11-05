@@ -1,6 +1,6 @@
 {
   "name": "@bisual/ngx-index-template",
-  "version": "3.0.0",
+  "version": "3.0.1",
   "description": "Reactive index-page primitives for Angular 22",
   "keywords": [
     "angular",
